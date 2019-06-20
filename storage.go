@@ -1,7 +1,6 @@
 package gblist
 
 import (
-	"fmt"
 	"github.com/boltdb/bolt"
 	"log"
 	"net"
@@ -15,31 +14,18 @@ type storage struct {
 }
 
 // New opens a Bolt DB database at the given path
-func New(path string, days int) storage {
-
-	var ttl time.Duration
+func New(path string, ttl time.Duration) (storage, error) {
 	db, err := bolt.Open(path, 0600, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if days > 0 {
-		ttl, err = time.ParseDuration(fmt.Sprintf("%dh", days*24)) // each day 24h
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		log.Fatalf("invalid number of days: %d", days)
-	}
 	s := storage{
 		Database: db,
 		TTL: ttl,
 	}
-	return s
+	return s, err
 }
 
 // Add insert or replace an IP address in the given bucket.
-func (s *storage) Add(bucket string, ip net.IP) {
-	s.Database.Update(func(tx *bolt.Tx) error {
+func (s *storage) Add(bucket string, ip net.IP) error {
+	err := s.Database.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte(bucket))
 		if err != nil {
 			log.Fatal(err)
@@ -48,13 +34,14 @@ func (s *storage) Add(bucket string, ip net.IP) {
 		err = b.Put([]byte(ip.String()), []byte(expirationTimestamp))
 		return err
 	})
+	return err
 }
 
 // List returns all the IP addresses from the given bucket that have not expired yet.
-func (s *storage) List(bucket string) []net.IP {
+func (s *storage) List(bucket string) ([]net.IP, error) {
 	var list []net.IP
 	now := time.Now()
-	s.Database.View(func(tx *bolt.Tx) error {
+	err := s.Database.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucket))
 		if b != nil {
 			b.ForEach(func(k, v []byte) error {
@@ -78,15 +65,41 @@ func (s *storage) List(bucket string) []net.IP {
 				}
 				return nil
 			})
-		} else {
-			log.Fatalf("no bucket %s", bucket)
 		}
 		return nil
 	})
-	return list
+	return list, err
 }
 
 // Close closes the Bolt database
-func (s *storage) Close() {
-	s.Database.Close()
+func (s *storage) Close() error {
+	return s.Database.Close()
+}
+
+// Dump returns a map of the current IPs in the bucket with their expiration time
+func (s *storage) Dump(bucket string) (map[string]string, error) {
+	var list = make(map[string]string)
+	err := s.Database.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b != nil {
+			b.ForEach(func(k, v []byte) error {
+				var ipValue string
+				var expirationTime string
+				ipValue = string(k)
+				ip := net.ParseIP(ipValue)
+				if ip == nil {
+					ipValue = ipValue + "(invalid)"
+				}
+				unixTimestamp, err := strconv.ParseInt(string(v), 10, 64)
+				if err != nil {
+					expirationTime = err.Error()
+				}
+				expirationTime = time.Unix(unixTimestamp, 0).String()
+				list[ipValue] = expirationTime
+				return nil
+			})
+		}
+		return nil
+	})
+	return list, err
 }
