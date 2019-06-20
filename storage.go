@@ -10,7 +10,7 @@ import (
 
 type storage struct {
 	Database *bolt.DB
-	TTL time.Duration
+	TTL      time.Duration
 }
 
 // New opens a Bolt DB database at the given path
@@ -18,7 +18,7 @@ func New(path string, ttl time.Duration) (storage, error) {
 	db, err := bolt.Open(path, 0600, nil)
 	s := storage{
 		Database: db,
-		TTL: ttl,
+		TTL:      ttl,
 	}
 	return s, err
 }

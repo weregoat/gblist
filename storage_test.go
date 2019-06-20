@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const DB  = "test.db"
+const DB = "test.db"
 const BUCKET = "test"
 
 func TestNew(t *testing.T) {
@@ -55,7 +55,7 @@ func TestStorage_Add(t *testing.T) {
 	if len(list) != 2 {
 		t.Errorf("wrong number of elements %d", len(list))
 	}
-	for _,v := range list {
+	for _, v := range list {
 		if !v.Equal(ip1) && !v.Equal(ip2) {
 			t.Errorf("Invalid element %s in database", v.String())
 		}

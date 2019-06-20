@@ -12,8 +12,6 @@ import (
 	"time"
 )
 
-
-
 func main() {
 	var databasePath = flag.String("db", "/tmp/gblist.db", "full path of the database file")
 	var print = flag.Bool("print", false, "print the non expired IP addresses from the database")
@@ -36,7 +34,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer s.Close()
-	if ! *print && ! *dump {
+	if !*print && !*dump {
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -75,4 +73,3 @@ func main() {
 	}
 
 }
-
