@@ -29,7 +29,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not parse duration for banning time because error: %s", err.Error())
 	}
-	s, err := gblist.New(*databasePath, ttl)
+	s, err := gblist.Open(*databasePath, ttl)
 	if err != nil {
 		log.Fatal(err)
 	}

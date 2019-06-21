@@ -8,15 +8,15 @@ import (
 	"time"
 )
 
-type storage struct {
+type Storage struct {
 	Database *bolt.DB
 	TTL      time.Duration
 }
 
-// New opens a Bolt DB database at the given path
-func New(path string, ttl time.Duration) (storage, error) {
+// Opens a Bolt DB database at the given path
+func Open(path string, ttl time.Duration) (Storage, error) {
 	db, err := bolt.Open(path, 0600, nil)
-	s := storage{
+	s := Storage{
 		Database: db,
 		TTL:      ttl,
 	}
@@ -24,7 +24,7 @@ func New(path string, ttl time.Duration) (storage, error) {
 }
 
 // Add insert or replace an IP address in the given bucket.
-func (s *storage) Add(bucket string, ip net.IP) error {
+func (s *Storage) Add(bucket string, ip net.IP) error {
 	err := s.Database.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte(bucket))
 		if err != nil {
@@ -38,7 +38,7 @@ func (s *storage) Add(bucket string, ip net.IP) error {
 }
 
 // List returns all the IP addresses from the given bucket that have not expired yet.
-func (s *storage) List(bucket string) ([]net.IP, error) {
+func (s *Storage) List(bucket string) ([]net.IP, error) {
 	var list []net.IP
 	now := time.Now()
 	err := s.Database.Update(func(tx *bolt.Tx) error {
@@ -72,12 +72,12 @@ func (s *storage) List(bucket string) ([]net.IP, error) {
 }
 
 // Close closes the Bolt database
-func (s *storage) Close() error {
+func (s *Storage) Close() error {
 	return s.Database.Close()
 }
 
 // Dump returns a map of the current IPs in the bucket with their expiration time
-func (s *storage) Dump(bucket string) (map[string]string, error) {
+func (s *Storage) Dump(bucket string) (map[string]string, error) {
 	var list = make(map[string]string)
 	err := s.Database.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucket))

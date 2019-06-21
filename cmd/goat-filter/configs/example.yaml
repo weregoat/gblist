@@ -1,0 +1,16 @@
+--
+sources:
+  - /var/log/mail.log
+# https://github.com/google/re2/wiki/Syntax
+patterns:
+  - "lost connection after (?:CONNECT|HELO|STARTTLS|EHLO|DATA|UNKNOWN) from [^[:space:]]+\[(?P<ip>[0-9\.:a-f]+)\]"
+database: /tmp/goat-filter.db
+bucket: goat-filter
+# weeks days hours minutes seconds
+ttl: "1w2d3h4m5s"
+network_whitelist:
+  - 186.59.62.125/32
+# https://golang.org/pkg/text/template/
+nft:
+  chain: goat-filter
+  template: 'add inet filter {{.Chain}} ip saddr {{.IP}} drop'
