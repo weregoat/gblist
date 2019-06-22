@@ -49,7 +49,6 @@ func (s *Storage) Add(bucket string, ip net.IP) error {
 func (s *Storage) List(bucket string) ([]Record, error) {
 	var list []Record
 	var purge []string
-	defer s.Purge(bucket, purge...)
 	now := time.Now()
 	records, err := s.Dump(bucket)
 	if err == nil {
@@ -61,6 +60,7 @@ func (s *Storage) List(bucket string) ([]Record, error) {
 			}
 		}
 	}
+	err = s.Purge(bucket, purge...)
 	return list, err
 }
 

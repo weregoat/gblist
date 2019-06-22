@@ -12,7 +12,7 @@ const BUCKET = "test"
 
 func TestNew(t *testing.T) {
 	ttl, err := time.ParseDuration("10m")
-	s, err := New(DB, ttl)
+	s, err := Open(DB, ttl)
 	if err != nil {
 		t.Error(err)
 	}
@@ -30,7 +30,7 @@ func TestStorage_Add(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	s, err := New(DB, ttl)
+	s, err := Open(DB, ttl)
 	if err != nil {
 		t.Error(err)
 	}
@@ -56,8 +56,8 @@ func TestStorage_Add(t *testing.T) {
 		t.Errorf("wrong number of elements %d", len(list))
 	}
 	for _, v := range list {
-		if !v.Equal(ip1) && !v.Equal(ip2) {
-			t.Errorf("Invalid element %s in database", v.String())
+		if !v.IPAddress.Equal(ip1) && !v.IPAddress.Equal(ip2) {
+			t.Errorf("Invalid element %s in database", v.IPAddress.String())
 		}
 	}
 	s.Close()
@@ -74,7 +74,7 @@ func TestStorage_List(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	s, err := New(DB, ttl)
+	s, err := Open(DB, ttl)
 	if err != nil {
 		t.Error(err)
 	}
@@ -92,7 +92,6 @@ func TestStorage_List(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	time.Sleep(ttl)
 	list, err := s.List(BUCKET)
 	if err != nil {
 		t.Error(err)
