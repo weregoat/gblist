@@ -113,3 +113,50 @@ func TestStorage_List(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestStorage_Purge(t *testing.T) {
+	ip1 := net.ParseIP("127.0.0.1")
+	ip2 := net.ParseIP("192.168.0.0")
+	ttl, err := time.ParseDuration("90m")
+	if err != nil {
+		t.Error(err)
+	}
+	s, err := Open(DB, ttl)
+	if err != nil {
+		t.Error(err)
+	}
+	err = s.Add(BUCKET, ip1)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = s.Add(BUCKET, ip1)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = s.Purge(BUCKET, ip2.String())
+	if err != nil {
+		t.Error(err)
+	}
+	list, err := s.List(BUCKET)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(list) != 1 {
+		t.Errorf("wrong number of elements %d", len(list))
+	}
+	// Check the elements have been deleted too
+	dump, err := s.Dump(BUCKET)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(dump) != 1 {
+		t.Errorf("wrong number of elements %d (some were not deleted)", len(dump))
+	}
+	s.Close()
+	err = os.Remove(DB)
+	if err != nil {
+		t.Error(err)
+	}
+}
