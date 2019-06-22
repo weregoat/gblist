@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 )
 
@@ -26,6 +27,7 @@ type Config struct {
 	Bucket    string   `yaml:"bucket"`
 	TTL       string   `yaml:"ttl"`
 	WhiteList []string `yaml:"network_whitelist"`
+	Template  string   `yaml:"print_template"`
 }
 
 // Settings are the settings from the configuration after parsing
@@ -35,6 +37,7 @@ type Settings struct {
 	Sources   []string
 	Bucket    string
 	WhiteList []*net.IPNet
+	Template  *template.Template
 }
 
 func main() {
@@ -104,8 +107,12 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		for _, ip := range list {
-			fmt.Println(ip.String())
+		for _, record := range list {
+			if settings.Template != nil {
+				settings.Template.Execute(os.Stdout, record)
+			} else {
+				fmt.Println(record.IPAddress.String())
+			}
 		}
 	}
 
@@ -161,6 +168,13 @@ func parseConfig(cfg *Config) (settings Settings, err error) {
 		} else {
 			settings.WhiteList = append(settings.WhiteList, ipNet)
 		}
+	}
+	if len(cfg.Template) > 0 {
+		tmpl, err := template.New("print").Parse(cfg.Template)
+		if err != nil {
+			return settings, err
+		}
+		settings.Template = tmpl
 	}
 	return
 }
