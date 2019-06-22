@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"text/template"
 	"time"
 )
 
@@ -55,18 +56,19 @@ func main() {
 			if err != nil {
 				log.Print(err)
 			} else {
-				for _, ip := range list {
-					fmt.Println(ip.String())
+				for _, record := range list {
+					fmt.Println(record.IPAddress.String())
 				}
 			}
 		}
 		if *dump {
+			tmpl := template.Must(template.New("dump").Parse("{{.IPAddress.String}}=>{{.ExpirationTime.String}}\n"))
 			dump, err := s.Dump(*bucket)
 			if err != nil {
-				log.Print(err)
+				log.Fatal(err)
 			} else {
-				for ip, expiration := range dump {
-					fmt.Printf("%s->%s\n", ip, expiration)
+				for _, record := range dump {
+					tmpl.Execute(os.Stdout, record)
 				}
 			}
 		}

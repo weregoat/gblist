@@ -1,6 +1,8 @@
 package gblist
 
 import (
+	"errors"
+	"fmt"
 	"github.com/boltdb/bolt"
 	"log"
 	"net"
@@ -11,6 +13,11 @@ import (
 type Storage struct {
 	Database *bolt.DB
 	TTL      time.Duration
+}
+
+type Record struct {
+	IPAddress net.IP
+	ExpirationTime time.Time
 }
 
 // Opens a Bolt DB database at the given path
@@ -37,38 +44,44 @@ func (s *Storage) Add(bucket string, ip net.IP) error {
 	return err
 }
 
-// List returns all the IP addresses from the given bucket that have not expired yet.
-func (s *Storage) List(bucket string) ([]net.IP, error) {
-	var list []net.IP
+// List returns all the IP addresses from the given bucket that have not expired yet
+// and purges the expired records from the database.
+func (s *Storage) List(bucket string) ([]Record, error) {
+	var list []Record
+	var purge []string
+	defer s.Purge(bucket, purge...)
 	now := time.Now()
+	records, err := s.Dump(bucket)
+	if err == nil {
+		for _, record := range records {
+			if now.Before(record.ExpirationTime) {
+				list = append(list, record)
+			} else {
+				purge = append(purge, record.IPAddress.String())
+			}
+		}
+	}
+	return list, err
+}
+
+// Purge removes records from the database
+func (s *Storage) Purge(bucket string, addresses ...string) error {
 	err := s.Database.Update(func(tx *bolt.Tx) error {
+		var err error
 		b := tx.Bucket([]byte(bucket))
 		if b != nil {
-			b.ForEach(func(k, v []byte) error {
-				ipValue := string(k)
-				ip := net.ParseIP(ipValue)
-				if ip != nil {
-					unixTimestamp, err := strconv.ParseInt(string(v), 10, 64)
-					if err == nil {
-						expirationTime := time.Unix(unixTimestamp, 0)
-						if now.Before(expirationTime) {
-							list = append(list, ip)
-						} else {
-							b.Delete(k)
-						}
-					} else {
-						log.Print(err.Error())
-						b.Delete(k)
-					}
-				} else {
-					b.Delete(k)
+			for _, ip := range addresses {
+				err = b.Delete([]byte(ip))
+				if err != nil {
+					break
 				}
-				return nil
-			})
+			}
+		} else {
+			err = errors.New(fmt.Sprintf("no %s bucket found", bucket))
 		}
-		return nil
+		return err
 	})
-	return list, err
+	return err
 }
 
 // Close closes the Bolt database
@@ -76,30 +89,31 @@ func (s *Storage) Close() error {
 	return s.Database.Close()
 }
 
-// Dump returns a map of the current IPs in the bucket with their expiration time
-func (s *Storage) Dump(bucket string) (map[string]string, error) {
-	var list = make(map[string]string)
+// Dump returns a slice of the current (valid) IPs in the bucket and purges invalid ones
+func (s *Storage) Dump(bucket string) ([]Record, error) {
+	var records []Record
+	var purge []string
 	err := s.Database.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucket))
 		if b != nil {
 			b.ForEach(func(k, v []byte) error {
-				var ipValue string
-				var expirationTime string
-				ipValue = string(k)
-				ip := net.ParseIP(ipValue)
-				if ip == nil {
-					ipValue = ipValue + "(invalid)"
-				}
+				ip := net.ParseIP(string(k))
 				unixTimestamp, err := strconv.ParseInt(string(v), 10, 64)
-				if err != nil {
-					expirationTime = err.Error()
+				if err == nil && ip != nil {
+					expirationTime := time.Unix(unixTimestamp, 0)
+					record := Record{
+						IPAddress: ip,
+						ExpirationTime: expirationTime,
+					}
+					records = append(records, record)
+				} else {
+					purge = append(purge, string(k))
 				}
-				expirationTime = time.Unix(unixTimestamp, 0).String()
-				list[ipValue] = expirationTime
 				return nil
 			})
 		}
 		return nil
 	})
-	return list, err
+	err = s.Purge(bucket, purge...)
+	return records, err
 }
