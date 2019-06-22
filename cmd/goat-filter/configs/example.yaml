@@ -1,4 +1,4 @@
---
+---
 sources:
   - /var/log/mail.log
 # https://github.com/google/re2/wiki/Syntax
@@ -10,7 +10,7 @@ bucket: goat-filter
 ttl: "1w2d3h4m5s"
 network_whitelist:
   - 186.59.62.125/32
+# The Golang template below can use the Golang properties of the struct
+# defined in the gblist.Record
 # https://golang.org/pkg/text/template/
-nft:
-  chain: goat-filter
-  template: 'add inet filter {{.Chain}} ip saddr {{.IP}} drop'
+print_template: "add inet filter goat-filter ip saddr {{.IPAddress}} drop\n"
