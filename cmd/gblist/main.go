@@ -62,7 +62,7 @@ func main() {
 			}
 		}
 		if *dump {
-			tmpl := template.Must(template.New("dump").Parse("{{.IPAddress.String}}=>{{.ExpirationTime.String}}\n"))
+			tmpl := template.Must(template.New("dump").Parse("{{.ExpirationTime}} {{.IPAddress}}\n"))
 			dump, err := s.Dump(*bucket)
 			if err != nil {
 				log.Fatal(err)
