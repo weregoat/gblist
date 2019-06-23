@@ -21,6 +21,7 @@ func main() {
 	var minutes = flag.Int("minutes", 0, "number of minutes of banning time (they all sum up)")
 	var bucket = flag.String("bucket", "default", "name of the bucket for storing IP addresses")
 	var dump = flag.Bool("dump", false, "dump the result of the database")
+	var purge = flag.Bool("purge", false, "remove the given IPs from the bucket")
 	flag.Parse()
 	duration := fmt.Sprintf("%dh", 14*24) // 14 days
 	if *days != 0 || *hours != 0 || *minutes != 0 {
@@ -37,19 +38,24 @@ func main() {
 	defer s.Close()
 	if !*print && !*dump {
 		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			line := scanner.Text()
-			ip := net.ParseIP(strings.TrimSpace(line))
-			if ip != nil {
-				err := s.Add(*bucket, ip)
-				if err != nil {
-					log.Print(err)
+			for scanner.Scan() {
+				line := scanner.Text()
+				ip := net.ParseIP(strings.TrimSpace(line))
+				if ip != nil {
+					var err error
+					if *purge {
+						err = s.Purge(*bucket, ip.String())
+					} else {
+						err = s.Add(*bucket, ip)
+					}
+					if err != nil {
+						log.Print(err)
+					}
 				}
 			}
-		}
-		if err := scanner.Err(); err != nil {
-			fmt.Fprintln(os.Stderr, "reading standard input:", err)
-		}
+			if err := scanner.Err(); err != nil {
+				fmt.Fprintln(os.Stderr, "reading standard input:", err)
+			}
 	} else {
 		if *print {
 			list, err := s.List(*bucket)
