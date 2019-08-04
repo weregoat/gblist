@@ -75,15 +75,18 @@ func main() {
 						ip := net.ParseIP(match[1])
 						if ip != nil {
 							if ! isWhitelisted(ip, settings.WhiteList) {
-								// Notice that given the way the storage library
-								// uses bolt API each add is a transaction, and
-								// in case of error whatever was added is not
-								// rolled back.
-								// Which is fine for my scope.
-								err = settings.Storage.Add(settings.Bucket, ip)
-								if err != nil {
-									break
-								}
+								_,cidr,err := net.ParseCIDR(addMask(ip.String()))
+								if err == nil && cidr != nil {
+									// Notice that given the way the storage library
+									// uses bolt API each add is a transaction, and
+									// in case of error whatever was added is not
+									// rolled back.
+									// Which is fine for my scope.
+									err = settings.Storage.Add(settings.Bucket, *cidr)
+									if err != nil {
+										break
+									}
+								} 
 							}
 						}
 					}
@@ -111,7 +114,7 @@ func main() {
 			if settings.Template != nil {
 				settings.Template.Execute(os.Stdout, record)
 			} else {
-				fmt.Println(record.IPAddress.String())
+				fmt.Println(record.CIDR.String())
 			}
 		}
 	}
@@ -170,7 +173,10 @@ func parseConfig(cfg *Config) (settings Settings, err error) {
 		}
 	}
 	if len(cfg.Template) > 0 {
-		tmpl, err := template.New("print").Parse(cfg.Template)
+		fmap := template.FuncMap{
+			"format": format,
+		}
+		tmpl, err := template.New("print").Funcs(fmap).Parse(cfg.Template)
 		if err != nil {
 			return settings, err
 		}
@@ -257,4 +263,25 @@ func loadConfig(path string) (Config, error) {
 	}
 
 	return cfg, err
+}
+
+// addMask tries to format a single address into CIDR form.
+func addMask(address string) string {
+	// If the address already contains a "/" we assume is already correctly masked.
+	if strings.Contains(address, "/") {
+		return address
+	}
+	mask := "32"
+	// If the address does include a ":", we assume is IPv6 and
+	// use the "/128 mask"
+	if strings.Contains(address,":") {
+		mask = "128"
+	}
+	address = fmt.Sprintf("%s/%s", address, mask)
+	return address
+}
+
+// formatIP returns the IP CIDR as string (to be used in template)
+func format(ip net.IPNet) string {
+	return ip.String()
 }

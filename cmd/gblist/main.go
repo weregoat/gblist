@@ -40,16 +40,20 @@ func main() {
 		scanner := bufio.NewScanner(os.Stdin)
 			for scanner.Scan() {
 				line := scanner.Text()
-				ip := net.ParseIP(strings.TrimSpace(line))
-				if ip != nil {
-					var err error
-					if *purge {
-						err = s.Purge(*bucket, ip.String())
-					} else {
-						err = s.Add(*bucket, ip)
-					}
-					if err != nil {
-						log.Print(err)
+				_,ip, err := net.ParseCIDR(strings.TrimSpace(addMask(line)))
+				if err != nil {
+					log.Print(err)
+				} else {
+					if ip != nil {
+						var err error
+						if *purge {
+							err = s.Purge(*bucket, ip.String())
+						} else {
+							err = s.Add(*bucket, *ip)
+						}
+						if err != nil {
+							log.Print(err)
+						}
 					}
 				}
 			}
@@ -63,12 +67,15 @@ func main() {
 				log.Print(err)
 			} else {
 				for _, record := range list {
-					fmt.Println(record.IPAddress.String())
+					fmt.Println(record.CIDR.String())
 				}
 			}
 		}
 		if *dump {
-			tmpl := template.Must(template.New("dump").Parse("{{.ExpirationTime}} {{.IPAddress}}\n"))
+			fmap := template.FuncMap{
+				"format": format,
+			}
+			tmpl := template.Must(template.New("dump").Funcs(fmap).Parse("{{.ExpirationTime}} {{.CIDR | format}}\n"))
 			dump, err := s.Dump(*bucket)
 			if err != nil {
 				log.Fatal(err)
@@ -80,4 +87,25 @@ func main() {
 		}
 	}
 
+}
+
+// addMask tries to convert a IP address string into a CIDR string.
+func addMask(address string) string {
+	// If the address already contains a "/" we assume is already correctly masked.
+	if strings.Contains(address, "/") {
+		return address
+	}
+	mask := "32"
+	// If the address does include a ":", we assume is IPv6 and
+	// use the "/128 mask"
+	if strings.Contains(address,":") {
+		mask = "128"
+	}
+	address = fmt.Sprintf("%s/%s", address, mask)
+	return address
+}
+
+// formatIP returns the IP CIDR as string (to be used in template)
+func format(ip net.IPNet) string {
+	return ip.String()
 }

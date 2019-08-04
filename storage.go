@@ -16,7 +16,7 @@ type Storage struct {
 }
 
 type Record struct {
-	IPAddress net.IP
+	CIDR             net.IPNet
 	ExpirationTime time.Time
 }
 
@@ -31,7 +31,7 @@ func Open(path string, ttl time.Duration) (Storage, error) {
 }
 
 // Add insert or replace an IP address in the given bucket.
-func (s *Storage) Add(bucket string, ip net.IP) error {
+func (s *Storage) Add(bucket string, ip net.IPNet) error {
 	err := s.Database.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte(bucket))
 		if err != nil {
@@ -56,7 +56,7 @@ func (s *Storage) List(bucket string) ([]Record, error) {
 			if now.Before(record.ExpirationTime) {
 				list = append(list, record)
 			} else {
-				purge = append(purge, record.IPAddress.String())
+				purge = append(purge, record.CIDR.String())
 			}
 		}
 	}
@@ -97,12 +97,12 @@ func (s *Storage) Dump(bucket string) ([]Record, error) {
 		b := tx.Bucket([]byte(bucket))
 		if b != nil {
 			b.ForEach(func(k, v []byte) error {
-				ip := net.ParseIP(string(k))
-				unixTimestamp, err := strconv.ParseInt(string(v), 10, 64)
-				if err == nil && ip != nil {
+				_, ip, IPError := net.ParseCIDR(string(k))
+				unixTimestamp, timeError := strconv.ParseInt(string(v), 10, 64)
+				if IPError == nil && ip != nil && timeError == nil {
 					expirationTime := time.Unix(unixTimestamp, 0)
 					record := Record{
-						IPAddress: ip,
+						CIDR:             *ip,
 						ExpirationTime: expirationTime,
 					}
 					records = append(records, record)
