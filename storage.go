@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -16,7 +17,7 @@ type Storage struct {
 }
 
 type Record struct {
-	CIDR             net.IPNet
+	IP             string
 	ExpirationTime time.Time
 }
 
@@ -31,16 +32,19 @@ func Open(path string, ttl time.Duration) (Storage, error) {
 }
 
 // Add insert or replace an IP address in the given bucket.
-func (s *Storage) Add(bucket string, ip net.IPNet) error {
-	err := s.Database.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists([]byte(bucket))
-		if err != nil {
-			log.Fatal(err)
-		}
-		expirationTimestamp := strconv.FormatInt(time.Now().Add(s.TTL).Unix(), 10)
-		err = b.Put([]byte(ip.String()), []byte(expirationTimestamp))
-		return err
-	})
+func (s *Storage) Add(bucket string, ip string) error {
+	valid, err := s.IsValid(ip)
+	if valid {
+		err = s.Database.Update(func(tx *bolt.Tx) error {
+			b, err := tx.CreateBucketIfNotExists([]byte(bucket))
+			if err != nil {
+				log.Fatal(err)
+			}
+			expirationTimestamp := strconv.FormatInt(time.Now().Add(s.TTL).Unix(), 10)
+			err = b.Put([]byte(ip), []byte(expirationTimestamp))
+			return err
+		})
+	}
 	return err
 }
 
@@ -56,7 +60,7 @@ func (s *Storage) List(bucket string) ([]Record, error) {
 			if now.Before(record.ExpirationTime) {
 				list = append(list, record)
 			} else {
-				purge = append(purge, record.CIDR.String())
+				purge = append(purge, record.IP)
 			}
 		}
 	}
@@ -97,17 +101,18 @@ func (s *Storage) Dump(bucket string) ([]Record, error) {
 		b := tx.Bucket([]byte(bucket))
 		if b != nil {
 			b.ForEach(func(k, v []byte) error {
-				_, ip, IPError := net.ParseCIDR(string(k))
+				ip := string(k)
 				unixTimestamp, timeError := strconv.ParseInt(string(v), 10, 64)
-				if IPError == nil && ip != nil && timeError == nil {
+				valid, _ := s.IsValid(ip)
+				if valid && timeError == nil {
 					expirationTime := time.Unix(unixTimestamp, 0)
 					record := Record{
-						CIDR:             *ip,
+						IP:             ip,
 						ExpirationTime: expirationTime,
 					}
 					records = append(records, record)
 				} else {
-					purge = append(purge, string(k))
+					purge = append(purge, ip)
 				}
 				return nil
 			})
@@ -116,4 +121,31 @@ func (s *Storage) Dump(bucket string) ([]Record, error) {
 	})
 	err = s.Purge(bucket, purge...)
 	return records, err
+}
+
+// isValid tries to parse an IP (address or CIDR) and return true if it succeed; false otherwise
+func (s *Storage) IsValid(ip string) (valid bool, err error) {
+	var address net.IP
+	// Assume that it's a CIDR if it has "/"
+	if strings.Contains(ip, "/") {
+		var network *net.IPNet
+		address, network, err = net.ParseCIDR(ip)
+		if network == nil && address != nil {
+			address = nil
+		}
+	} else {
+		// Otherwise we assume is a single IP address
+		address = net.ParseIP(ip)
+	}
+	if address != nil && err == nil {
+		valid = true
+	} else {
+		valid = false
+		errorText := fmt.Sprintf("%s is not a valid IP address or CIDR", ip)
+		if err != nil {
+			errorText = fmt.Sprintf("%s: %s", errorText, err.Error())
+		}
+		err = errors.New(errorText)
+	}
+	return valid, err
 }

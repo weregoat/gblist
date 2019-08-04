@@ -71,22 +71,30 @@ func main() {
 			for _, re := range settings.RegExps {
 				matches := re.FindAllStringSubmatch(scanner.Text(), -1)
 				for _, match := range matches {
-					if len(match[1]) > 0 {
-						ip := net.ParseIP(match[1])
-						if ip != nil {
-							if ! isWhitelisted(ip, settings.WhiteList) {
-								_,cidr,err := net.ParseCIDR(addMask(ip.String()))
-								if err == nil && cidr != nil {
-									// Notice that given the way the storage library
-									// uses bolt API each add is a transaction, and
-									// in case of error whatever was added is not
-									// rolled back.
-									// Which is fine for my scope.
-									err = settings.Storage.Add(settings.Bucket, *cidr)
-									if err != nil {
-										break
-									}
-								} 
+					ip := strings.TrimSpace(match[1])
+					var ipAddress net.IP
+					if len(ip) > 0 { // No reason to waste time on an empty string
+						if strings.Contains(ip, "/") { // Dirty check for getting CIDR
+							ipAddress,_,err = net.ParseCIDR(ip)
+							if err != nil { // With an error the ipAddress should be null anyway.
+								ipAddress = nil // We make sure, in any case.
+							}
+						} else { // Otherwise we assume is a single IP address
+							ipAddress = net.ParseIP(ip) // If it cannot be parsed it will return a nil
+						}
+						if ipAddress != nil {
+							if ! isWhitelisted(ipAddress, settings.WhiteList) {
+								// Notice that given the way the storage library
+								// uses bolt API each add is a transaction, and
+								// in case of error whatever was added is not
+								// rolled back.
+								// Which is fine for my scope.
+								// Notice that we are adding the matching string, not the ipAddress
+								// as in case of a parsed CIDR is not what we want.
+								err = settings.Storage.Add(settings.Bucket, ip)
+								if err != nil {
+									break
+								}
 							}
 						}
 					}
@@ -114,7 +122,7 @@ func main() {
 			if settings.Template != nil {
 				settings.Template.Execute(os.Stdout, record)
 			} else {
-				fmt.Println(record.CIDR.String())
+				fmt.Println(record.IP)
 			}
 		}
 	}
@@ -173,10 +181,7 @@ func parseConfig(cfg *Config) (settings Settings, err error) {
 		}
 	}
 	if len(cfg.Template) > 0 {
-		fmap := template.FuncMap{
-			"format": format,
-		}
-		tmpl, err := template.New("print").Funcs(fmap).Parse(cfg.Template)
+		tmpl, err := template.New("print").Parse(cfg.Template)
 		if err != nil {
 			return settings, err
 		}
@@ -263,25 +268,4 @@ func loadConfig(path string) (Config, error) {
 	}
 
 	return cfg, err
-}
-
-// addMask tries to format a single address into CIDR form.
-func addMask(address string) string {
-	// If the address already contains a "/" we assume is already correctly masked.
-	if strings.Contains(address, "/") {
-		return address
-	}
-	mask := "32"
-	// If the address does include a ":", we assume is IPv6 and
-	// use the "/128 mask"
-	if strings.Contains(address,":") {
-		mask = "128"
-	}
-	address = fmt.Sprintf("%s/%s", address, mask)
-	return address
-}
-
-// formatIP returns the IP CIDR as string (to be used in template)
-func format(ip net.IPNet) string {
-	return ip.String()
 }
