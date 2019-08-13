@@ -56,7 +56,7 @@ func main() {
 			}
 		} else { // We process all the IP given (more than one allowed)
 			for _, ip := range flag.Args() {
-				process(s,ip, *bucket, *purge)
+				process(s, ip, *bucket, *purge)
 			}
 		}
 	} else {
@@ -84,7 +84,7 @@ func main() {
 	}
 }
 
-func process (storage gblist.Storage, ip string, bucket string, purge bool) {
+func process(storage gblist.Storage, ip string, bucket string, purge bool) {
 	valid, err := storage.IsValid(ip)
 	if valid {
 		if purge {

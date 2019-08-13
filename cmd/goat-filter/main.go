@@ -75,7 +75,7 @@ func main() {
 					var ipAddress net.IP
 					if len(ip) > 0 { // No reason to waste time on an empty string
 						if strings.Contains(ip, "/") { // Dirty check for getting CIDR
-							ipAddress,_,err = net.ParseCIDR(ip)
+							ipAddress, _, err = net.ParseCIDR(ip)
 							if err != nil { // With an error the ipAddress should be null anyway.
 								ipAddress = nil // We make sure, in any case.
 							}
@@ -83,7 +83,7 @@ func main() {
 							ipAddress = net.ParseIP(ip) // If it cannot be parsed it will return a nil
 						}
 						if ipAddress != nil {
-							if ! isWhitelisted(ipAddress, settings.WhiteList) {
+							if !isWhitelisted(ipAddress, settings.WhiteList) {
 								// Notice that given the way the storage library
 								// uses bolt API each add is a transaction, and
 								// in case of error whatever was added is not
