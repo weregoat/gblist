@@ -1,7 +1,6 @@
 package gblist
 
 import (
-	"net"
 	"os"
 	"testing"
 	"time"
@@ -24,8 +23,8 @@ func TestNew(t *testing.T) {
 }
 
 func TestStorage_Add(t *testing.T) {
-	ip1 := net.ParseIP("127.0.0.1")
-	ip2 := net.ParseIP("192.168.0.0")
+	ip1 := "127.0.0.1"
+	ip2 := "192.168.0.0"
 	ttl, err := time.ParseDuration("10m")
 	if err != nil {
 		t.Error(err)
@@ -56,8 +55,8 @@ func TestStorage_Add(t *testing.T) {
 		t.Errorf("wrong number of elements %d", len(list))
 	}
 	for _, v := range list {
-		if !v.IPAddress.Equal(ip1) && !v.IPAddress.Equal(ip2) {
-			t.Errorf("Invalid element %s in database", v.IPAddress.String())
+		if v.IP != ip1 && v.IP != ip2 {
+			t.Errorf("Invalid element %s in database", v.IP)
 		}
 	}
 	s.Close()
@@ -68,8 +67,8 @@ func TestStorage_Add(t *testing.T) {
 }
 
 func TestStorage_List(t *testing.T) {
-	ip1 := net.ParseIP("127.0.0.1")
-	ip2 := net.ParseIP("192.168.0.0")
+	ip1 := "127.0.0.1"
+	ip2 := "192.168.0.0"
 	ttl, err := time.ParseDuration("1ns")
 	if err != nil {
 		t.Error(err)
@@ -115,8 +114,8 @@ func TestStorage_List(t *testing.T) {
 }
 
 func TestStorage_Purge(t *testing.T) {
-	ip1 := net.ParseIP("127.0.0.1")
-	ip2 := net.ParseIP("192.168.0.0")
+	ip1 := "127.0.0.1"
+	ip2 := "192.168.0.0"
 	ttl, err := time.ParseDuration("90m")
 	if err != nil {
 		t.Error(err)
@@ -135,7 +134,7 @@ func TestStorage_Purge(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = s.Purge(BUCKET, ip2.String())
+	err = s.Purge(BUCKET, ip2)
 	if err != nil {
 		t.Error(err)
 	}
