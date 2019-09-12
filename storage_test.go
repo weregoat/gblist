@@ -23,27 +23,29 @@ func TestNew(t *testing.T) {
 }
 
 func TestStorage_Add(t *testing.T) {
-	ip1 := "127.0.0.1"
-	ip2 := "192.168.0.0"
 	ttl, err := time.ParseDuration("10m")
 	if err != nil {
 		t.Error(err)
 	}
+
+	r1 := createRecord("193.22.0.0/16", "Something", ttl, t)
+	r2 := createRecord("10.55.11.12", "Something else", ttl, t)
+
 	s, err := Open(DB, ttl)
 	if err != nil {
 		t.Error(err)
 	}
-	err = s.Add(BUCKET, ip1)
+	err = s.Add(BUCKET, r1)
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = s.Add(BUCKET, ip1)
+	err = s.Add(BUCKET, r1) // Add the same element again, to check overwrites
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = s.Add(BUCKET, ip2)
+	err = s.Add(BUCKET, r2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -55,7 +57,7 @@ func TestStorage_Add(t *testing.T) {
 		t.Errorf("wrong number of elements %d", len(list))
 	}
 	for _, v := range list {
-		if v.IP != ip1 && v.IP != ip2 {
+		if (v.IP != r1.IP && v.IP != r2.IP) || (v.Description != r1.Description && v.Description != r2.Description) {
 			t.Errorf("Invalid element %s in database", v.IP)
 		}
 	}
@@ -67,30 +69,35 @@ func TestStorage_Add(t *testing.T) {
 }
 
 func TestStorage_List(t *testing.T) {
-	ip1 := "127.0.0.1"
-	ip2 := "192.168.0.0"
 	ttl, err := time.ParseDuration("1ns")
 	if err != nil {
 		t.Error(err)
 	}
+
+	r1 := createRecord("193.22.0.0/16", "", ttl, t)
+	r2 := createRecord("10.55.11.12", "", ttl, t)
+
 	s, err := Open(DB, ttl)
 	if err != nil {
 		t.Error(err)
 	}
-	err = s.Add(BUCKET, ip1)
+	err = s.Add(BUCKET, r1)
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = s.Add(BUCKET, ip1)
+	// Add the same record again; it should be overwritten
+	err = s.Add(BUCKET, r1)
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = s.Add(BUCKET, ip2)
+	err = s.Add(BUCKET, r2)
 	if err != nil {
 		t.Error(err)
 	}
+
+	time.Sleep(time.Duration(5))
 	list, err := s.List(BUCKET)
 	if err != nil {
 		t.Error(err)
@@ -114,27 +121,31 @@ func TestStorage_List(t *testing.T) {
 }
 
 func TestStorage_Purge(t *testing.T) {
-	ip1 := "127.0.0.1"
-	ip2 := "192.168.0.0"
 	ttl, err := time.ParseDuration("90m")
 	if err != nil {
 		t.Error(err)
 	}
+
+	r1 := createRecord("127.0.0.1", "", ttl, t)
+	r2 := createRecord("192.168.1.0/24", "", ttl, t)
+
+
 	s, err := Open(DB, ttl)
 	if err != nil {
 		t.Error(err)
 	}
-	err = s.Add(BUCKET, ip1)
+
+	err = s.Add(BUCKET, r1)
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = s.Add(BUCKET, ip1)
+	err = s.Add(BUCKET, r2)
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = s.Purge(BUCKET, ip2)
+	err = s.Purge(BUCKET, r2.IP)
 	if err != nil {
 		t.Error(err)
 	}
@@ -152,10 +163,31 @@ func TestStorage_Purge(t *testing.T) {
 	}
 	if len(dump) != 1 {
 		t.Errorf("wrong number of elements %d (some were not deleted)", len(dump))
+	} else {
+		// Check the correct record was deleted
+		record := dump[0]
+		if record.IP != r1.IP {
+			t.Errorf("wrong record deleted")
+		}
 	}
 	s.Close()
 	err = os.Remove(DB)
 	if err != nil {
 		t.Error(err)
 	}
+}
+
+func TestRecord_New(t *testing.T) {
+	_,err := New("8888", time.Duration(1000), "")
+	if err == nil {
+		t.Errorf("failed to verify IP correctly")
+	}
+}
+
+func createRecord(ip, description string, ttl time.Duration,  t *testing.T) Record {
+	record, err := New(ip, ttl, description)
+	if err != nil {
+		t.Error(err)
+	}
+	return record
 }

@@ -21,6 +21,7 @@ func main() {
 	var bucket = flag.String("bucket", "default", "name of the bucket for storing IP addresses")
 	var dump = flag.Bool("dump", false, "dump the result of the database")
 	var purge = flag.Bool("purge", false, "remove the given IPs from the bucket")
+	var description = flag.String("description", "", "add the given text as description for the record")
 	flag.Parse()
 	duration := fmt.Sprintf("%dh", 14*24) // 14 days
 	if *days != 0 || *hours != 0 || *minutes != 0 {
@@ -42,12 +43,12 @@ func main() {
 			scanner := bufio.NewScanner(os.Stdin)
 			for scanner.Scan() {
 				ip := strings.TrimSpace(scanner.Text())
-				valid, err := s.IsValid(ip)
-				if valid {
+				record, err := gblist.New(ip, s.TTL, *description)
+				if err == nil {
 					if *purge {
 						err = s.Purge(*bucket, ip)
 					} else {
-						err = s.Add(*bucket, ip)
+						err = s.Add(*bucket, record)
 					}
 				}
 				if err != nil {
@@ -56,7 +57,7 @@ func main() {
 			}
 		} else { // We process all the IP given (more than one allowed)
 			for _, ip := range flag.Args() {
-				process(s, ip, *bucket, *purge)
+				process(s, ip, *description, *bucket, *purge)
 			}
 		}
 	} else {
@@ -71,7 +72,7 @@ func main() {
 			}
 		}
 		if *dump {
-			tmpl := template.Must(template.New("dump").Parse("{{.ExpirationTime}} {{.IP}}\n"))
+			tmpl := template.Must(template.New("dump").Parse("{{.ExpirationTime}} {{.IP}} \"{{.Description}}\"\n"))
 			dump, err := s.Dump(*bucket)
 			if err != nil {
 				log.Fatal(err)
@@ -84,13 +85,13 @@ func main() {
 	}
 }
 
-func process(storage gblist.Storage, ip string, bucket string, purge bool) {
-	valid, err := storage.IsValid(ip)
-	if valid {
+func process(storage gblist.Storage, ip string, description string, bucket string, purge bool) {
+	record, err := gblist.New(ip, storage.TTL, description)
+	if err == nil {
 		if purge {
 			err = storage.Purge(bucket, ip)
 		} else {
-			err = storage.Add(bucket, ip)
+			err = storage.Add(bucket, record)
 		}
 	}
 	if err != nil {

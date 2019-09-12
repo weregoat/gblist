@@ -1,6 +1,7 @@
 package gblist
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
@@ -16,11 +17,6 @@ type Storage struct {
 	TTL      time.Duration
 }
 
-type Record struct {
-	IP             string
-	ExpirationTime time.Time
-}
-
 // Opens a Bolt DB database at the given path
 func Open(path string, ttl time.Duration) (Storage, error) {
 	db, err := bolt.Open(path, 0600, nil)
@@ -32,16 +28,18 @@ func Open(path string, ttl time.Duration) (Storage, error) {
 }
 
 // Add insert or replace an IP address in the given bucket.
-func (s *Storage) Add(bucket string, ip string) error {
-	valid, err := s.IsValid(ip)
+func (s *Storage) Add(bucket string, record Record) error {
+	valid, err := IsValid(record.IP) // Double checking this, as the property is public.
 	if valid {
 		err = s.Database.Update(func(tx *bolt.Tx) error {
 			b, err := tx.CreateBucketIfNotExists([]byte(bucket))
 			if err != nil {
 				log.Fatal(err)
 			}
-			expirationTimestamp := strconv.FormatInt(time.Now().Add(s.TTL).Unix(), 10)
-			err = b.Put([]byte(ip), []byte(expirationTimestamp))
+			payload, err := json.Marshal(&record)
+			if err == nil {
+				err = b.Put([]byte(record.IP), payload)
+			}
 			return err
 		})
 	}
@@ -95,24 +93,28 @@ func (s *Storage) Close() error {
 
 // Dump returns a slice of the current (valid) IPs in the bucket and purges invalid ones
 func (s *Storage) Dump(bucket string) ([]Record, error) {
-	var records []Record
+	var entries []Record
 	var purge []string
 	err := s.Database.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucket))
 		if b != nil {
 			b.ForEach(func(k, v []byte) error {
-				ip := string(k)
-				unixTimestamp, timeError := strconv.ParseInt(string(v), 10, 64)
-				valid, _ := s.IsValid(ip)
-				if valid && timeError == nil {
-					expirationTime := time.Unix(unixTimestamp, 0)
-					record := Record{
-						IP:             ip,
-						ExpirationTime: expirationTime,
+				var record Record
+				parseErr := json.Unmarshal(v, &record)
+				if parseErr != nil {
+					// Compatibility check with older format, where the value was just a timestamp
+					unixTimestamp, timeError := strconv.ParseInt(string(v), 10, 64)
+					if timeError == nil {
+						record.IP = string(k)
+						record.ExpirationTime = time.Unix(unixTimestamp, 0)
+						parseErr = nil
 					}
-					records = append(records, record)
+				}
+				valid, _ := IsValid(record.IP)
+				if valid && parseErr == nil {
+					entries = append(entries, record)
 				} else {
-					purge = append(purge, ip)
+					purge = append(purge, string(k))
 				}
 				return nil
 			})
@@ -120,11 +122,11 @@ func (s *Storage) Dump(bucket string) ([]Record, error) {
 		return nil
 	})
 	err = s.Purge(bucket, purge...)
-	return records, err
+	return entries, err
 }
 
 // isValid tries to parse an IP (address or CIDR) and return true if it succeed; false otherwise
-func (s *Storage) IsValid(ip string) (valid bool, err error) {
+func IsValid(ip string) (valid bool, err error) {
 	var address net.IP
 	// Assume that it's a CIDR if it has "/"
 	if strings.Contains(ip, "/") {

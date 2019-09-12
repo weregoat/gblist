@@ -69,7 +69,8 @@ func main() {
 		scanner := bufio.NewScanner(file)
 		for scanner.Scan() {
 			for _, re := range settings.RegExps {
-				matches := re.FindAllStringSubmatch(scanner.Text(), -1)
+				text := scanner.Text()
+				matches := re.FindAllStringSubmatch(text, -1)
 				for _, match := range matches {
 					ip := strings.TrimSpace(match[1])
 					var ipAddress net.IP
@@ -91,9 +92,12 @@ func main() {
 								// Which is fine for my scope.
 								// Notice that we are adding the matching string, not the ipAddress
 								// as in case of a parsed CIDR is not what we want.
-								err = settings.Storage.Add(settings.Bucket, ip)
-								if err != nil {
-									break
+								record, err := gblist.New(ip, settings.Storage.TTL, text)
+								if err == nil {
+									err = settings.Storage.Add(settings.Bucket, record)
+									if err != nil {
+										break
+									}
 								}
 							}
 						}
