@@ -34,3 +34,14 @@ func New(IP string, TTL time.Duration, description string) (r Record, err error)
 	}
 	return r, err
 }
+
+// IsValid returns if the record has a valid IP *and* it's not expired yet.
+func (r *Record) IsValid() bool {
+	valid := false // Default to false
+	now := time.Now()
+	if len(r.IP) > 0 &&
+		r.ExpirationTime.After(now) { // An existing record that has expired doesn't make much sense
+		valid, _ = IsValid(r.IP)
+	}
+	return valid
+}

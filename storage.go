@@ -125,7 +125,30 @@ func (s *Storage) Dump(bucket string) ([]Record, error) {
 	return entries, err
 }
 
-// isValid tries to parse an IP (address or CIDR) and return true if it succeed; false otherwise
+// Fetch tries to fetch a record from the given IP and bucket.
+// The function does not return an error if the record is not present,
+// as it's not properly an error (may add a bool in the return, for
+// such a case), but the record is not a valid one.
+// See: Record.IsValid()
+func (s *Storage) Fetch(bucket string, ip string) (Record, error) {
+	var record Record
+	err := s.Database.View(func(tx *bolt.Tx) error {
+		var err error
+		b := tx.Bucket([]byte(bucket))
+		if b != nil {
+			payload := b.Get([]byte(ip))
+			if payload != nil {
+				err = json.Unmarshal(payload, &record)
+			}
+		} else {
+			err = errors.New(fmt.Sprintf("no %s bucket found", bucket))
+		}
+		return err
+	})
+	return record, err
+}
+
+// IsValid tries to parse an IP (address or CIDR) and return true if it succeed; false otherwise
 func IsValid(ip string) (valid bool, err error) {
 	var address net.IP
 	// Assume that it's a CIDR if it has "/"

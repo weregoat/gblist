@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/weregoat/gblist"
-	"log"
 	"os"
 	"strings"
 	"text/template"
@@ -21,19 +20,21 @@ func main() {
 	var bucket = flag.String("bucket", "default", "name of the bucket for storing IP addresses")
 	var dump = flag.Bool("dump", false, "dump the result of the database")
 	var purge = flag.Bool("purge", false, "remove the given IPs from the bucket")
+	var query = flag.Bool("query", false, "query the database for the given IP")
 	var description = flag.String("description", "", "add the given text as description for the record")
 	flag.Parse()
 	duration := fmt.Sprintf("%dh", 14*24) // 14 days
+
 	if *days != 0 || *hours != 0 || *minutes != 0 {
 		duration = fmt.Sprintf("%dm", (*days*24+*hours)*60+*minutes)
 	}
 	ttl, err := time.ParseDuration(duration)
 	if err != nil {
-		log.Fatalf("could not parse duration for banning time because error: %s", err.Error())
+		printError(fmt.Sprintf("could not parse duration for banning time because error: %s", err.Error()), true)
 	}
 	s, err := gblist.Open(*databasePath, ttl)
 	if err != nil {
-		log.Fatal(err)
+		printError(err, true)
 	}
 	defer s.Close()
 	if !*print && !*dump {
@@ -43,28 +44,42 @@ func main() {
 			scanner := bufio.NewScanner(os.Stdin)
 			for scanner.Scan() {
 				ip := strings.TrimSpace(scanner.Text())
-				record, err := gblist.New(ip, s.TTL, *description)
-				if err == nil {
-					if *purge {
-						err = s.Purge(*bucket, ip)
-					} else {
-						err = s.Add(*bucket, record)
+				process(s, ip, *description, *bucket, *purge, *query)
+				/*
+				if *query {
+					record, err := s.Fetch(*bucket, ip)
+					if err != nil {
+						log.Fatal(err)
 					}
-				}
-				if err != nil {
-					log.Print(err)
-				}
+					if record.IsValid() {
+						tmpl.Execute(os.Stdout, record)
+					}
+				} else if *purge {
+					err = s.Purge(*bucket, ip)
+					if err != nil {
+						log.Fatal(err)
+					}
+				} else {
+					record, err := gblist.New(ip, s.TTL, *description)
+					if err != nil {
+						log.Print(err)
+					}
+					err = s.Add(*bucket, record)
+					if err != nil {
+						log.Fatal(err)
+					}
+				} */
 			}
 		} else { // We process all the IP given (more than one allowed)
 			for _, ip := range flag.Args() {
-				process(s, ip, *description, *bucket, *purge)
+				process(s, ip, *description, *bucket, *purge, *query)
 			}
 		}
 	} else {
 		if *print {
 			list, err := s.List(*bucket)
 			if err != nil {
-				log.Print(err)
+				printError(err, false)
 			} else {
 				for _, record := range list {
 					fmt.Println(record.IP)
@@ -72,10 +87,10 @@ func main() {
 			}
 		}
 		if *dump {
-			tmpl := template.Must(template.New("dump").Parse("{{.ExpirationTime}} {{.IP}} \"{{.Description}}\"\n"))
+			tmpl := template.Must(template.New("dump").Parse("IP: {{.IP}}\nExpiration time: {{.ExpirationTime}}\nDescription: \"{{.Description}}\"\n\n"))
 			dump, err := s.Dump(*bucket)
 			if err != nil {
-				log.Fatal(err)
+				printError(err, true)
 			} else {
 				for _, record := range dump {
 					tmpl.Execute(os.Stdout, record)
@@ -85,16 +100,37 @@ func main() {
 	}
 }
 
-func process(storage gblist.Storage, ip string, description string, bucket string, purge bool) {
-	record, err := gblist.New(ip, storage.TTL, description)
-	if err == nil {
-		if purge {
-			err = storage.Purge(bucket, ip)
-		} else {
-			err = storage.Add(bucket, record)
+func process(storage gblist.Storage, ip string, description string, bucket string, purge bool, query bool) {
+	if query {
+		record, err := storage.Fetch(bucket, ip)
+		if err != nil {
+			printError(err, true)
+		}
+		if record.IsValid() {
+			tmpl := template.Must(template.New("dump").Parse("IP: {{.IP}}\nExpiration time: {{.ExpirationTime}}\nDescription: \"{{.Description}}\"\n\n"))
+			tmpl.Execute(os.Stdout, record)
+		}
+	} else if purge {
+		err := storage.Purge(bucket, ip)
+		if err != nil {
+			printError(err, true)
+		}
+	} else {
+		record, err := gblist.New(ip, storage.TTL, description)
+		if err != nil {
+			printError(err, true)
+		}
+		err = storage.Add(bucket, record)
+		if err != nil {
+			printError(err, true)
 		}
 	}
-	if err != nil {
-		log.Print(err)
+}
+
+// Error prints an error on StdErr and exits (or not)
+func printError(message interface{}, exit bool) {
+	fmt.Fprintln(os.Stderr, message)
+	if exit {
+		os.Exit(1)
 	}
 }
