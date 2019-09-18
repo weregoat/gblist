@@ -129,7 +129,6 @@ func TestStorage_Purge(t *testing.T) {
 	r1 := createRecord("127.0.0.1", "", ttl, t)
 	r2 := createRecord("192.168.1.0/24", "", ttl, t)
 
-
 	s, err := Open(DB, ttl)
 	if err != nil {
 		t.Error(err)
@@ -178,13 +177,13 @@ func TestStorage_Purge(t *testing.T) {
 }
 
 func TestRecord_New(t *testing.T) {
-	_,err := New("8888", time.Duration(1000), "")
+	_, err := New("8888", time.Duration(1000), "")
 	if err == nil {
 		t.Errorf("failed to verify IP correctly")
 	}
 }
 
-func createRecord(ip, description string, ttl time.Duration,  t *testing.T) Record {
+func createRecord(ip, description string, ttl time.Duration, t *testing.T) Record {
 	record, err := New(ip, ttl, description)
 	if err != nil {
 		t.Error(err)
