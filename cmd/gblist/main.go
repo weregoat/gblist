@@ -46,29 +46,29 @@ func main() {
 				ip := strings.TrimSpace(scanner.Text())
 				process(s, ip, *description, *bucket, *purge, *query)
 				/*
-				if *query {
-					record, err := s.Fetch(*bucket, ip)
-					if err != nil {
-						log.Fatal(err)
-					}
-					if record.IsValid() {
-						tmpl.Execute(os.Stdout, record)
-					}
-				} else if *purge {
-					err = s.Purge(*bucket, ip)
-					if err != nil {
-						log.Fatal(err)
-					}
-				} else {
-					record, err := gblist.New(ip, s.TTL, *description)
-					if err != nil {
-						log.Print(err)
-					}
-					err = s.Add(*bucket, record)
-					if err != nil {
-						log.Fatal(err)
-					}
-				} */
+					if *query {
+						record, err := s.Fetch(*bucket, ip)
+						if err != nil {
+							log.Fatal(err)
+						}
+						if record.IsValid() {
+							tmpl.Execute(os.Stdout, record)
+						}
+					} else if *purge {
+						err = s.Purge(*bucket, ip)
+						if err != nil {
+							log.Fatal(err)
+						}
+					} else {
+						record, err := gblist.New(ip, s.TTL, *description)
+						if err != nil {
+							log.Print(err)
+						}
+						err = s.Add(*bucket, record)
+						if err != nil {
+							log.Fatal(err)
+						}
+					} */
 			}
 		} else { // We process all the IP given (more than one allowed)
 			for _, ip := range flag.Args() {
@@ -101,6 +101,9 @@ func main() {
 }
 
 func process(storage gblist.Storage, ip string, description string, bucket string, purge bool, query bool) {
+	if len(ip) == 0 {
+		return
+	}
 	if query {
 		record, err := storage.Fetch(bucket, ip)
 		if err != nil {
